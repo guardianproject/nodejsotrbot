@@ -7,7 +7,9 @@ var parser = new RiveScript ({
 	debug: true,
 	onDebug: function (msg) { log.info ("RIVESCRIPT DEBUG: " + msg); }
 });
-parser.loadDirectory (__dirname + "/../rivescripts/", success, error);
+
+//parser.loadDirectory (__dirname + "/../rivescripts/", success, error);
+parser.loadDirectory (process.env.RIVESCRIPTS, success, error);
 
 function success (cnt) { 
 	log.info ("RIVEBOT succesfully loaded directory")
