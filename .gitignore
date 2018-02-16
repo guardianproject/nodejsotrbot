@@ -1,3 +1,4 @@
 *.pid
 *.sw*
 node_modules/
+rivescripts/
