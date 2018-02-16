@@ -1,6 +1,6 @@
 
 var fs = require("fs");
-var logStream = openLog("/tmp/otrbot.log");
+var logStream = openLog("bot.log");
 
 function openLog(logfile) {
 	return fs.createWriteStream(logfile, { 
@@ -9,4 +9,5 @@ function openLog(logfile) {
 }
 module.exports.info = function (msg) {
 	logStream.write(msg + "\n");
+	console.log(msg)
 }
