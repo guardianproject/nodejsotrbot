@@ -17,7 +17,7 @@ module.exports.parse = function (msg) {
 		module.exports.emit ("composing", msg.attrs);
 	}
 	if (paused) { 
-		modules.export.emit ("paused", msg.attrs);
+		module.exports.emit ("paused", msg.attrs);
 	}
 }
 module.exports.send = function (from, to, message) {
