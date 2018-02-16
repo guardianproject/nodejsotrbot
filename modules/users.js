@@ -3,6 +3,15 @@ var log = require ('./log');
 
 var nano = require ('nano') ('http://localhost:5984');
 
+ nano.db.create('keys', function() {
+      console.log('you have created the db for keys.')
+  });
+
+ nano.db.create('profiles', function() {
+      console.log('you have created the db for profiles.')
+  });
+
+
 module.exports = new EventEmitter ();
 module.exports.privateKey = function (id, cb, new_k) {
 	module.exports.checkDb ('keys', function () { 
