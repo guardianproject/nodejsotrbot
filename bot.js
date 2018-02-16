@@ -17,7 +17,9 @@ var OTR = require ("otr/lib/otr");
 var DSA = require ("otr/lib/dsa");
 var otr;
 
-var pKey = null;
+var pKey = DSA.parsePrivate(fs.readFileSync (process.env.PK).toString ());
+
+/**
 user.privateKey (process.env.JID, 
 	function (k) { 
 		pKey = DSA.parsePrivate(k); 
@@ -27,6 +29,7 @@ user.privateKey (process.env.JID,
 		return k;
 	}
 );
+**/
 
 var buddies = {};
 
@@ -99,6 +102,16 @@ stanza.Message.on ("message", function (attrs, body) {
 		// new buddy...! 
 		if (!buddies [attrs.from]) { 
 			otr = new OTR ({fragment_size: 140, send_interval: 200, priv: pKey, debug: true});
+			  // Allow version 2 or 3 of the OTR protocol to be used.
+			otr.ALLOW_V2=true;
+			otr.ALLOW_V3=true;
+			otr.REQUIRE_ENCRYPTION=true;
+			otr.ERROR_START_AKE=true;
+ // Advertise your support of OTR using the whitespace tag.
+    			otr.SEND_WHITESPACE_TAG = false
+    // Start the OTR AKE when you receive a whitespace tag.
+    			otr.WHITESPACE_START_AKE = false
+
 			buddies [attrs.from] = otr;
 			otr.on ('error', function (error, severity) { 
 				log.info ("ERROR (" + severity + "): " + error);
@@ -126,13 +139,13 @@ stanza.Message.on ("message", function (attrs, body) {
 					log.info ("META: "+  meta);
 				}
 				client.send (stanza.Message.send (attrs.to, attrs.from, msg));
-				//log.info ('send: ' + attrs.to + " " + attrs.from + " " + msg);
+				log.info ('send: ' + attrs.to + " " + attrs.from + " " + msg);
 			});
 			otr.on ('status', function (state) { 
 				log.info ('change of status: ' + state);
 				switch (state) { 
 					case OTR.CONST.STATUS_AKE_SUCCESS: 
-						log.info ("SUCCESS!");
+						log.info ("OTR SUCCESS!");
 						break;
 				}
 			});
