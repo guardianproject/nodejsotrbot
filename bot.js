@@ -38,19 +38,26 @@ client.connection.on ("data", function (data) {
 });
 client.on ("online", function () { 
 	log.info ("online");
-	client.send('<presence/>')
+	client.send('<presence/>');
 });
 client.on ("error", function (e) { 
 	log.info ("error: " + e);
 });
 client.on ("stanza", function (sta) { 
-	console.log ("received stanza");
+	console.log ("received stanza: " + sta);
 	stanza.parse (sta);
 });
+
 stanza.Presence.on ("subscribe", function (attrs) { 
-	log.info ("got subscribe");
+	log.info ("got subscribe; accepting...");
 	client.send (stanza.Presence.acceptSubscription (attrs.from));
-})
+	client.send (stanza.Presence.requestSubscription (attrs.from));
+});
+
+stanza.Presence.on ("subscribed", function (attrs) { 
+	log.info ("got subscribed");
+});
+
 stanza.Message.on ("composing", function (attrs) { 
 	log.info (attrs.from + " is writing a message!");
 });
@@ -104,13 +111,13 @@ stanza.Message.on ("message", function (attrs, body) {
 			otr = new OTR ({fragment_size: 140, send_interval: 200, priv: pKey, debug: true});
 			  // Allow version 2 or 3 of the OTR protocol to be used.
 			otr.ALLOW_V2=true;
-			otr.ALLOW_V3=true;
+			otr.ALLOW_V3=false;
 			otr.REQUIRE_ENCRYPTION=true;
 			otr.ERROR_START_AKE=true;
  // Advertise your support of OTR using the whitespace tag.
-    			otr.SEND_WHITESPACE_TAG = false
+    			otr.SEND_WHITESPACE_TAG = true
     // Start the OTR AKE when you receive a whitespace tag.
-    			otr.WHITESPACE_START_AKE = false
+    			otr.WHITESPACE_START_AKE = true
 
 			buddies [attrs.from] = otr;
 			otr.on ('error', function (error, severity) { 
@@ -146,6 +153,7 @@ stanza.Message.on ("message", function (attrs, body) {
 				switch (state) { 
 					case OTR.CONST.STATUS_AKE_SUCCESS: 
 						log.info ("OTR SUCCESS!");
+						otr.sendMsg(":)");
 						break;
 				}
 			});

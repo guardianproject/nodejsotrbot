@@ -11,3 +11,6 @@ module.exports.parse = function (stanza) {
 module.exports.acceptSubscription = function (to) { 
 	return new Client.Stanza ("presence", {"to": to, "type": "subscribed"});
 }
+module.exports.requestSubscription = function (to) { 
+	return new Client.Stanza ("presence", {"to": to, "type": "subscribe"});
+}
