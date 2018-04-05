@@ -5,7 +5,7 @@ module.exports = new EventEmitter ();
 var RiveScript = require ("rivescript"), buddies = {};
 var parser = new RiveScript ({
 	utf8: true,
-	debug: true,
+	debug: false,
 	onDebug: function (msg) { log.info ("RIVESCRIPT DEBUG: " + msg); }
 });
 
@@ -20,7 +20,7 @@ function error (cnt, err) {
 	log.info ("ERROR!!! RIVESCRIPT: " + cnt + err );
 }
 module.exports.getReply = function (user, msg) {
-	log.info ("User: " + user + "\nMsg: " + msg);
+	//log.info ("User: " + user + "\nMsg: " + msg);
 	parser.setUservars (user, {});
 	return parser.reply (user, msg); 
 }

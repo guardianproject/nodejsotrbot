@@ -44,30 +44,31 @@ client.on ("error", function (e) {
 	log.info ("error: " + e);
 });
 client.on ("stanza", function (sta) { 
-	console.log ("received stanza: " + sta);
+	//console.log ("received stanza: " + sta);
 	stanza.parse (sta);
 });
 
 stanza.Presence.on ("subscribe", function (attrs) { 
-	log.info ("got subscribe; accepting...");
+	//log.info ("got subscribe; accepting...");
 	client.send (stanza.Presence.acceptSubscription (attrs.from));
 	client.send (stanza.Presence.requestSubscription (attrs.from));
 });
 
 stanza.Presence.on ("subscribed", function (attrs) { 
-	log.info ("got subscribed");
+	//log.info ("got subscribed");
 });
 
 stanza.Message.on ("composing", function (attrs) { 
-	log.info (attrs.from + " is writing a message!");
+	//log.info (attrs.from + " is writing a message!");
 });
 stanza.Message.on ("message", function (attrs, body) { 
 	var messageReceived = function (attrs, body, otr) {
 		body = strip_tags (body);
 		try {
+			log.info("REQUEST: " + attrs.from + ": " + body);
 			var rep = rivebot.getReply (attrs.from, body);
-			log.info ("error: " + rep + " " + (rep.indexOf ("ERR:")));
 			if (rep && rep.indexOf ("ERR:") !== -1) throw "no rivebot reply";
+			log.info("RESPONSE: " + attrs.from + ": " + rep);
 			otr.sendMsg (rep);	
 		} catch (erx) {
 			user.load (attrs.to, attrs.from, function (userData) { 
@@ -108,7 +109,7 @@ stanza.Message.on ("message", function (attrs, body) {
 		var otr = buddies [attrs.from];
 		// new buddy...! 
 		if (!buddies [attrs.from]) { 
-			otr = new OTR ({fragment_size: 140, send_interval: 200, priv: pKey, debug: true});
+			otr = new OTR ({fragment_size: 140, send_interval: 200, priv: pKey, debug: false});
 			  // Allow version 2 or 3 of the OTR protocol to be used.
 			otr.ALLOW_V2=true;
 			otr.ALLOW_V3=false;
@@ -126,7 +127,7 @@ stanza.Message.on ("message", function (attrs, body) {
 			otr.on ('ui', function (msg, enc, meta) { 
 				var lines = body.split ("\n");
 				if (!enc && lines [0].trim ().substring (0, 4) == "?OTR") { 
-					log.info ("XXX: " + body)
+					//log.info ("XXX: " + body)
 				} else if (!enc) { 
 					//Received a plain text message, let's start OTR!
 					otr.sendMsg ("Wait... Let's encrypt!");
@@ -143,16 +144,16 @@ stanza.Message.on ("message", function (attrs, body) {
 			});
 			otr.on ('io', function (msg, meta) { 
 				if (meta) { 
-					log.info ("META: "+  meta);
+					//log.info ("META: "+  meta);
 				}
 				client.send (stanza.Message.send (attrs.to, attrs.from, msg));
-				log.info ('send: ' + attrs.to + " " + attrs.from + " " + msg);
+				//log.info ('send: ' + attrs.to + ": " + msg);
 			});
 			otr.on ('status', function (state) { 
-				log.info ('change of status: ' + state);
+				//log.info ('change of status: ' + state);
 				switch (state) { 
 					case OTR.CONST.STATUS_AKE_SUCCESS: 
-						log.info ("OTR SUCCESS!");
+						//log.info ("OTR SUCCESS!");
 						otr.sendMsg(":)");
 						break;
 				}

@@ -5,7 +5,12 @@ module.exports = new EventEmitter ();
 module.exports.parse = function (stanza) { 
 	if (!stanza) return;
 	if (stanza.attrs && stanza.attrs.type) { 
-		module.exports.emit (stanza.attrs.type, stanza.attrs);
+		try {
+			module.exports.emit (stanza.attrs.type, stanza.attrs);
+		}
+		catch(error) {
+			console.error(error);
+		}
 	}
 }
 module.exports.acceptSubscription = function (to) { 

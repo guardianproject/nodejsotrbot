@@ -7,9 +7,7 @@ module.exports.parse = function (msg) {
 		log.info ("NO MESSAGE RECEIVED!");
 		return;
 	}
-	log.info ("will parse");
 	var body = msg.getChildText ('body'), composing = msg.getChild ('composing'), paused = msg.getChild ('paused');
-	log.info (body + " " + composing + " " + paused);
 	if (body) { 
 		module.exports.emit ("message", msg.attrs, body);
 	}
