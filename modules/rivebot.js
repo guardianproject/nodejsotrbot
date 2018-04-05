@@ -4,6 +4,7 @@ module.exports = new EventEmitter ();
 
 var RiveScript = require ("rivescript"), buddies = {};
 var parser = new RiveScript ({
+	utf8: true,
 	debug: true,
 	onDebug: function (msg) { log.info ("RIVESCRIPT DEBUG: " + msg); }
 });
