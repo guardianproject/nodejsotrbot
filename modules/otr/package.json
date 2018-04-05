@@ -1,0 +1,98 @@
+{
+  "_from": "otr",
+  "_id": "otr@0.2.16",
+  "_inBundle": false,
+  "_integrity": "sha1-BKdTRPUi38sHeMVDjA9V5p0+i8E=",
+  "_location": "/otr",
+  "_phantomChildren": {},
+  "_requested": {
+    "type": "tag",
+    "registry": true,
+    "raw": "otr",
+    "name": "otr",
+    "escapedName": "otr",
+    "rawSpec": "",
+    "saveSpec": null,
+    "fetchSpec": "latest"
+  },
+  "_requiredBy": [
+    "#USER",
+    "/"
+  ],
+  "_resolved": "https://registry.npmjs.org/otr/-/otr-0.2.16.tgz",
+  "_shasum": "04a75344f522dfcb0778c5438c0f55e69d3e8bc1",
+  "_spec": "otr",
+  "_where": "/media/n8fr8/nate128/dev/repos/ractive",
+  "author": {
+    "name": "Arlo Breault",
+    "email": "arlolra@gmail.com"
+  },
+  "bugs": {
+    "url": "https://github.com/arlolra/otr/issues"
+  },
+  "bundleDependencies": false,
+  "contributors": [
+    {
+      "name": "William Budington",
+      "email": "bill.budington@gmail.com"
+    },
+    {
+      "name": "Nadim Kobeissi",
+      "email": "nadim@nadim.cc"
+    },
+    {
+      "name": "Klaus Herberth",
+      "email": "github@spam.herberth.eu"
+    },
+    {
+      "name": "JC Brand",
+      "email": "jc@opkode.com"
+    },
+    {
+      "name": "Mark Vayngrib",
+      "email": "mark.vayngrib@lablz.com"
+    },
+    {
+      "name": "Jérémie Astori",
+      "email": "jeremie@astori.fr"
+    }
+  ],
+  "dependencies": {
+    "webworker-threads": "~0.4.13"
+  },
+  "deprecated": false,
+  "description": "Off-the-Record Messaging Protocol",
+  "devDependencies": {
+    "grunt": "~0.4.4",
+    "grunt-cli": "~0.1.13",
+    "grunt-contrib-clean": "~0.5.0",
+    "grunt-contrib-concat": "~0.4.0",
+    "grunt-contrib-jshint": "~0.10.0",
+    "grunt-contrib-uglify": "~0.5.0",
+    "mocha": "~1.20.1"
+  },
+  "homepage": "https://github.com/arlolra/otr",
+  "keywords": [
+    "otr",
+    "off-the-record",
+    "off the record",
+    "crypto",
+    "protocol",
+    "socialist millionaire",
+    "dsa"
+  ],
+  "license": "MPL-2.0",
+  "main": "index.js",
+  "name": "otr",
+  "optionalDependencies": {
+    "webworker-threads": "~0.4.13"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/arlolra/otr.git"
+  },
+  "scripts": {
+    "test": "make test"
+  },
+  "version": "0.2.16"
+}

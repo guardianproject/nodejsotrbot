@@ -13,7 +13,7 @@ var client = new Client ({
 var user = require ("./modules/users");
 var nlp = require ("./modules/nlp");
 var commandParser = require ('./modules/commands');
-var OTR = require ("otr/lib/otr");
+var OTR = require ("./modules/otr/lib/otr");
 var DSA = require ("otr/lib/dsa");
 var otr;
 

@@ -1,0 +1,24 @@
+{
+    "browser"  : true
+  , "devel"    : true
+  , "node"     : true
+  , "bitwise"  : false
+  , "indent"   : false
+  , "laxcomma" : true
+  , "asi"      : true
+  , "undef"    : true
+  , "strict"   : true
+  , "expr"     : true
+  , "white"    : false
+  , "multistr" : true
+  , "globals"  : {
+        "it"            : true
+      , "beforeEach"    : true
+      , "before"        : true
+      , "describe"      : true
+      , "define"        : true
+      , "postMessage"   : true
+      , "onmessage"     : true
+      , "importScripts" : true
+    }
+}
