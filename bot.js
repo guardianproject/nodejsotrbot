@@ -1,15 +1,18 @@
 "use strict";
 
-
 global.Olm = require('olm');
 // Use path and fs
 const path = require('path');
 const fs = require('fs');
 
+require("./creds.js");
+
 var sdk = require("matrix-js-sdk");
 var clc = require("cli-color");
 var LocalStorage = require('node-localstorage').LocalStorage;
 var rivebot = require ("./modules/rivebot");
+
+//require("./node_modules/matrix-js-sdk/lib/crypto/store/localStorage-crypto-store.js");
 
 // Has a directory been given on the command line?
 // Otherwise show information message.
@@ -21,163 +24,78 @@ if(targetDir === undefined) {
 }
 
 // Create in memory store
-var matrixStore = new sdk.MatrixInMemoryStore();
-var localStorage = new LocalStorage(path.join(targetDir, 'localstorage'));
+var localpath = path.join(targetDir,'localstorage');
+var localStorage = new LocalStorage(localpath)
+
+var matrixStore = new sdk.MatrixInMemoryStore({localStorage});
+var sessionStore =  new sdk.WebStorageSessionStore(localStorage);
+
+// TODO: (upstream) global state race condition
+//sdk.setCryptoStoreFactory(new sdk.LocalStorageCryptoStore(localStorage));
 
 var matrixClient = sdk.createClient({
-    sessionStore: sdk.WebStorageSessionStore(localStorage),
     store: matrixStore,
+    sessionStore: sessionStore,
     baseUrl: myBaseUrl,
     accessToken: myAccessToken,
     userId: myUserId,
+    deviceId: myDeviceId
 });
 
 
 // Data structures
 var roomList = [];
-var viewingRoom = null;
-var numMessagesToShow = 20;
-
-// Reading from stdin
-var CLEAR_CONSOLE = '\x1B[2J';
-var readline = require("readline");
-var rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    completer: completer
-});
-rl.setPrompt("$ ");
-rl.on('line', function(line) {
-    if (line.trim().length === 0) {
-        rl.prompt();
-        return;
-    }
-    if (line === "/help") {
-        printHelp();
-        rl.prompt();
-        return;
-    }
-
-    if (viewingRoom) {
-        if (line === "/exit") {
-            viewingRoom = null;
-            printRoomList();
-        }
-	else if (line === "/send") {
-
-        }
-        else if (line === "/members") {
-            printMemberList(viewingRoom);
-        }
-        else if (line === "/roominfo") {
-            printRoomInfo(viewingRoom);
-        }
-        else if (line === "/resend") {
-            // get the oldest not sent event.
-            var notSentEvent;
-            for (var i = 0; i < viewingRoom.timeline.length; i++) {
-                if (viewingRoom.timeline[i].status == sdk.EventStatus.NOT_SENT) {
-                    notSentEvent = viewingRoom.timeline[i];
-                    break;
-                }
-            }
-            if (notSentEvent) {
-                matrixClient.resendEvent(notSentEvent, viewingRoom).done(function() {
-                    printMessages();
-                    rl.prompt();
-                }, function(err) {
-                    printMessages();
-                    print("/resend Error: %s", err);
-                    rl.prompt();
-                });
-                printMessages();
-                rl.prompt();
-            }
-        }
-        else if (line.indexOf("/more ") === 0) {
-            var amount = parseInt(line.split(" ")[1]) || 20;
-            matrixClient.scrollback(viewingRoom, amount).done(function(room) {
-                printMessages();
-                rl.prompt();
-            }, function(err) {
-                print("/more Error: %s", err);
-            });
-        }
-        else if (line.indexOf("/invite ") === 0) {
-            var userId = line.split(" ")[1].trim();
-            matrixClient.invite(viewingRoom.roomId, userId).done(function() {
-                printMessages();
-                rl.prompt();
-            }, function(err) {
-                print("/invite Error: %s", err);
-            });
-        }
-        else if (line.indexOf("/file ") === 0) {
-            var filename = line.split(" ")[1].trim();
-            var stream = fs.createReadStream(filename);
-            matrixClient.uploadContent({
-                stream: stream,
-                name: filename
-            }).done(function(url) {
-                var content = {
-                    msgtype: "m.file",
-                    body: filename,
-                    url: JSON.parse(url).content_uri
-                };
-                matrixClient.sendMessage(viewingRoom.roomId, content);
-            });
-        }
-        else {
-            matrixClient.sendTextMessage(viewingRoom.roomId, line).finally(function() {
-                printMessages();
-                rl.prompt();
-            });
-            // print local echo immediately
-            printMessages();
-        }
-    }
-    else {
-        if (line.indexOf("/join ") === 0) {
-            var roomIndex = line.split(" ")[1];
-            viewingRoom = roomList[roomIndex];
-            if (viewingRoom.getMember(myUserId).membership === "invite") {
-                // join the room first
-                matrixClient.joinRoom(viewingRoom.roomId).done(function(room) {
-                    setRoomList();
-                    viewingRoom = room;
-                    printMessages();
-                    rl.prompt();
-                }, function(err) {
-                    print("/join Error: %s", err);
-                });
-            }
-            else {
-                printMessages();
-            }
-        } 
-    }
-    rl.prompt();
-});
-// ==== END User input
+var numMessagesToShow = 0;
 
 // show the room list after syncing.
 matrixClient.on("sync", function(state, prevState, data) {
     switch (state) {
         case "PREPARED":
           setRoomList();
-          printRoomList();
-          printHelp();
-          rl.prompt();
         break;
    }
 });
 
+
+function handleEvent (event)
+{
+ print("Got Event: " + event);
+ if (event.isEncrypted()) {
+            // Will handle it later in Event.decrypted handler
+            return;
+        }
+
+ if (event.getType() === "m.room.message")
+	handleIncomingMessage(event);
+}
+
+matrixClient.on("Event", handleEvent)
+
+matrixClient.on("RoomMember.membership", function(event, member) {
+       if (member.membership === "invite" && member.userId === myUserId) {
+           matrixClient.joinRoom(member.roomId).done(function() {
+               print("Auto-joined %s", member.roomId);
+           });
+       }
+   });
+
+function handleEventDecrypted (event) 
+{
+
+   if (event.isDecryptionFailure()) {
+            //logger.warn("Decryption failure", { event });
+	    print("Decryption failure: " + event);
+            return;
+        }
+
+ if (event.getType() === "m.room.message")
+	handleIncomingMessage(event);
+}
+
+matrixClient.on("Event.decrypted", handleEventDecrypted)
+
 matrixClient.on("Room", function() {
     setRoomList();
-    if (!viewingRoom) {
-        printRoomList();
-        rl.prompt();
-    }
 });
 
 // print incoming messages.
@@ -185,21 +103,47 @@ matrixClient.on("Room.timeline", function(event, room, toStartOfTimeline) {
     if (toStartOfTimeline) {
         return; // don't print paginated results
     }
-    if (!viewingRoom || viewingRoom.roomId !== room.roomId) {
-        return; // not viewing a room or viewing the wrong room.
-    }
 
- var body = event.getContent().body;
-if (!body.startsWith('>'))
+    //printLine(event);
+    handleIncomingMessage(event);
+});
+
+function handleIncomingMessage (event)
 {
- var rep = '> ' + rivebot.getReply (event.sender, event.getContent().body);
-    print("rivebot says: %s",rep);
-            matrixClient.sendTextMessage(viewingRoom.roomId, rep).finally(function() {
-            });
+
+if (event.getSender() !== myUserId)
+{
+ var body = event.getContent().body;
+
+ if (body !== 'null' && body.length > 0 && body.startsWith(myNick))
+ {
+
+     if (body.startsWith(myNick))
+    	body = body.substring(myNick.length+1);
+
+	doBotReponse(event.getRoomId(),event.getSender(),body);
+ }
+
 }
 
-    printLine(event);
-});
+}
+
+function doBotReponse (roomId, sender, req)
+{
+ var rep = rivebot.getReply (sender, req);
+    print("rivebot says: %s",rep);
+            matrixClient.sendTextMessage(roomId, rep)
+                .catch((err) => {
+                    Object.keys(err.devices).forEach((userId) => {
+                        Object.keys(err.devices[userId]).map((deviceId) => {
+    print("rivebot: setting device known for user %s",userId);
+                            matrixClient.setDeviceKnown(userId, deviceId, true);
+                        });
+                    });
+                    // Try again
+                    matrixClient.sendTextMessage(roomId, body);
+                }).finally(function() {});
+}
 
 function setRoomList() {
     roomList = matrixClient.getRooms();
@@ -224,7 +168,6 @@ function setRoomList() {
 }
 
 function printRoomList() {
-    print(CLEAR_CONSOLE);
     print("Room List:");
     var fmts = {
         "invite": clc.cyanBright,
@@ -249,42 +192,6 @@ function printRoomList() {
             roomList[i].getJoinedMembers().length,
             dateStr
         );
-    }
-}
-
-function printHelp() {
-    var hlp = clc.italic.white;
-    print("Global commands:", hlp);
-    print("  '/help' : Show this help.", clc.white);
-    print("Room list index commands:", hlp);
-    print("  '/join <index>' Join a room, e.g. '/join 5'", clc.white);
-    print("Room commands:", hlp);
-    print("  '/exit' Return to the room list index.", clc.white);
-    print("  '/members' Show the room member list.", clc.white);
-    print("  '/invite @foo:bar' Invite @foo:bar to the room.", clc.white);
-    print("  '/more 15' Scrollback 15 events", clc.white);
-    print("  '/resend' Resend the oldest event which failed to send.", clc.white);
-    print("  '/roominfo' Display room info e.g. name, topic.", clc.white);
-}
-
-function completer(line) {
-    var completions = [
-        "/help", "/join ", "/exit", "/members", "/more ", "/resend", "/invite", "/send"
-    ];
-    var hits = completions.filter(function(c) { return c.indexOf(line) == 0 });
-    // show all completions if none found
-    return [hits.length ? hits : completions, line]
-}
-
-function printMessages() {
-    if (!viewingRoom) {
-        printRoomList();
-        return;
-    }
-    print(CLEAR_CONSOLE);
-    var mostRecentMessages = viewingRoom.timeline;
-    for (var i = 0; i < mostRecentMessages.length; i++) {
-        printLine(mostRecentMessages[i]);
     }
 }
 
@@ -395,6 +302,9 @@ function printLine(event) {
         separator = "---";
         fmt = clc.xterm(249).italic;
     }
+    else if (event.getType() === "m.room.invite") {
+      body = "Woohoo, we got invited to a room " + event.roomId;	
+    }
     else {
         // random message event
         body = (
@@ -405,11 +315,11 @@ function printLine(event) {
     }
     if (fmt) {
         print(
-            "[%s] %s %s %s", time, name, separator, body, fmt
+            "[%s] (%s) %s %s %s", time, event.roomId, name, separator, body, fmt
         );
     }
     else {
-        print("[%s] %s %s %s", time, name, separator, body);
+        print("[%s] (%s) %s %s %s", time, event.roomId, name, separator, body);
     }
 }
 
@@ -444,4 +354,8 @@ function fixWidth(str, len) {
 }
 
 matrixClient.initCrypto();
-matrixClient.startClient(numMessagesToShow);  // messages for each room.
+
+// Delay startClient() to give initCrypto() a little room to breathe
+        // This will delay first event delivery, but shouldn't cause any real problems
+        setTimeout((() => { matrixClient.startClient() }).bind(this), 500);
+
