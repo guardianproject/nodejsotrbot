@@ -30,6 +30,8 @@ var localStorage = new LocalStorage(localpath)
 var matrixStore = new sdk.MatrixInMemoryStore({localStorage});
 var sessionStore =  new sdk.WebStorageSessionStore(localStorage);
 
+var readyToReply = false;
+
 // TODO: (upstream) global state race condition
 //sdk.setCryptoStoreFactory(new sdk.LocalStorageCryptoStore(localStorage));
 
@@ -47,14 +49,26 @@ var matrixClient = sdk.createClient({
 var roomList = [];
 var numMessagesToShow = 0;
 
+matrixClient.startClient();
+
 // show the room list after syncing.
 matrixClient.on("sync", function(state, prevState, data) {
     switch (state) {
         case "PREPARED":
-          setRoomList();
+	   matrixClient.setDeviceDetails(matrixClient.deviceId, "ractive bot");
+           matrixClient.setDisplayName(myNick);
+
+	   matrixClient.on("Event", handleEvent)
+      	   matrixClient.on("Event.decrypted", handleEventDecrypted)
+           setRoomList();
+	   matrixClient.initCrypto();
+ //       setTimeout((() => { matrixClient.startClient() }).bind(this), 500);
+
+	
         break;
    }
 });
+
 
 
 function handleEvent (event)
@@ -69,7 +83,6 @@ function handleEvent (event)
 	handleIncomingMessage(event);
 }
 
-matrixClient.on("Event", handleEvent)
 
 matrixClient.on("RoomMember.membership", function(event, member) {
        if (member.membership === "invite" && member.userId === myUserId) {
@@ -81,9 +94,7 @@ matrixClient.on("RoomMember.membership", function(event, member) {
 
 function handleEventDecrypted (event) 
 {
-
    if (event.isDecryptionFailure()) {
-            //logger.warn("Decryption failure", { event });
 	    print("Decryption failure: " + event);
             return;
         }
@@ -92,7 +103,6 @@ function handleEventDecrypted (event)
 	handleIncomingMessage(event);
 }
 
-matrixClient.on("Event.decrypted", handleEventDecrypted)
 
 matrixClient.on("Room", function() {
     setRoomList();
@@ -111,19 +121,25 @@ matrixClient.on("Room.timeline", function(event, room, toStartOfTimeline) {
 function handleIncomingMessage (event)
 {
 
-if (event.getSender() !== myUserId)
+if (event.getSender() !== myUserId && readyToReply)
 {
  var body = event.getContent().body;
 
- if (body !== 'null' && body.length > 0 && body.startsWith(myNick))
+ if (typeof body !== 'undefined' && body.length > 0)
  {
-
      if (body.startsWith(myNick))
+     {
     	body = body.substring(myNick.length+1);
-
 	doBotReponse(event.getRoomId(),event.getSender(),body);
+     }
  }
+ else
+ {
+  matrixClient.sendTextMessage(roomId, "Sorry I couldn't understand that").catch((err) => {
+                                print("err sending message: " + err);
+                        });
 
+ }
 }
 
 }
@@ -131,17 +147,23 @@ if (event.getSender() !== myUserId)
 function doBotReponse (roomId, sender, req)
 {
  var rep = rivebot.getReply (sender, req);
-    print("rivebot says: %s",rep);
+    print("rivebot says: %s to room %s",rep,roomId);
             matrixClient.sendTextMessage(roomId, rep)
                 .catch((err) => {
                     Object.keys(err.devices).forEach((userId) => {
+    			print("rivebot set device known for: %s",userId);
                         Object.keys(err.devices[userId]).map((deviceId) => {
     print("rivebot: setting device known for user %s",userId);
-                            matrixClient.setDeviceKnown(userId, deviceId, true);
+                            matrixClient.setDeviceKnown(userId, deviceId, true).
+			    catch((err) => {
+				print("err setting device known: " + err);
+				});;
                         });
                     });
                     // Try again
-                    matrixClient.sendTextMessage(roomId, body);
+                    matrixClient.sendTextMessage(roomId, body).catch((err) => {
+				print("err sending message: " + err);
+			});
                 }).finally(function() {});
 }
 
@@ -353,9 +375,4 @@ function fixWidth(str, len) {
     return str;
 }
 
-matrixClient.initCrypto();
-
-// Delay startClient() to give initCrypto() a little room to breathe
-        // This will delay first event delivery, but shouldn't cause any real problems
-        setTimeout((() => { matrixClient.startClient() }).bind(this), 500);
 
