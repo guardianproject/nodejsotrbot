@@ -5,14 +5,16 @@ global.Olm = require('olm');
 const path = require('path');
 const fs = require('fs');
 
+
+const LocalStorageCryptoStore = require('matrix-js-sdk/lib/crypto/store/localStorage-crypto-store').default;
+
 require("./creds.js");
 
 var sdk = require("matrix-js-sdk");
 var clc = require("cli-color");
-var LocalStorage = require('node-localstorage').LocalStorage;
 var rivebot = require ("./modules/rivebot");
 
-//require("./node_modules/matrix-js-sdk/lib/crypto/store/localStorage-crypto-store.js");
+
 
 // Has a directory been given on the command line?
 // Otherwise show information message.
@@ -25,15 +27,17 @@ if(targetDir === undefined) {
 
 // Create in memory store
 var localpath = path.join(targetDir,'localstorage');
-var localStorage = new LocalStorage(localpath)
 
-var matrixStore = new sdk.MatrixInMemoryStore({localStorage});
-var sessionStore =  new sdk.WebStorageSessionStore(localStorage);
+// Loading localStorage module
+if (typeof global.localStorage === "undefined" || global.localStorage === null)
+    global.localStorage = new (require('node-localstorage').LocalStorage)(localpath);
+
+sdk.setCryptoStoreFactory(() => new LocalStorageCryptoStore(global.localStorage));
+
+var matrixStore = new sdk.MatrixInMemoryStore({localStorage: global.localStorage});
+var sessionStore =  new sdk.WebStorageSessionStore(global.localStorage);
 
 var readyToReply = false;
-
-// TODO: (upstream) global state race condition
-//sdk.setCryptoStoreFactory(new sdk.LocalStorageCryptoStore(localStorage));
 
 var matrixClient = sdk.createClient({
     store: matrixStore,
@@ -52,7 +56,9 @@ var numMessagesToShow = 0;
 matrixClient.startClient();
 
 // show the room list after syncing.
-matrixClient.on("sync", function(state, prevState, data) {
+matrixClient.on("sync",handleSync);
+
+function handleSync(state, prevState, data) {
     switch (state) {
         case "PREPARED":
 	   matrixClient.setDeviceDetails(matrixClient.deviceId, "ractive bot");
@@ -62,13 +68,12 @@ matrixClient.on("sync", function(state, prevState, data) {
       	   matrixClient.on("Event.decrypted", handleEventDecrypted)
            setRoomList();
 	   matrixClient.initCrypto();
- //       setTimeout((() => { matrixClient.startClient() }).bind(this), 500);
+        setTimeout((() => { matrixClient.startClient() }).bind(this), 500);
 
 	
         break;
    }
-});
-
+};
 
 
 function handleEvent (event)
@@ -96,11 +101,12 @@ function handleEventDecrypted (event)
 {
    if (event.isDecryptionFailure()) {
 	    print("Decryption failure: " + event);
+	    sendErrorMessage();
             return;
         }
 
  if (event.getType() === "m.room.message")
-	handleIncomingMessage(event);
+	handleIncomingMessage(event.getClearEvent());
 }
 
 
@@ -135,13 +141,20 @@ if (event.getSender() !== myUserId && readyToReply)
  }
  else
  {
-  matrixClient.sendTextMessage(roomId, "Sorry I couldn't understand that").catch((err) => {
-                                print("err sending message: " + err);
-                        });
+	sendErrorMessage();
+
 
  }
 }
 
+}
+
+
+function sendErrorMessage ()
+{
+matrixClient.sendTextMessage(roomId, "Sorry I couldn't understand that").catch((err) => {
+                                print("err sending message: " + err);
+                        });
 }
 
 function doBotReponse (roomId, sender, req)
