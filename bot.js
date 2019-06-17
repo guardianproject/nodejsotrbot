@@ -37,28 +37,29 @@ var sessionStore =  new sdk.WebStorageSessionStore(global.localStorage);
 
 var readyToReply = false;
 
+print("creating client for: %s",myBaseUrl);
 var matrixClient = sdk.createClient({
-    store: matrixStore,
-    sessionStore: sessionStore,
-    baseUrl: myBaseUrl,
-    accessToken: myAccessToken,
-    userId: myUserId,
-    deviceId: myDeviceId
+    baseUrl: myBaseUrl
 });
 
+print("logging in as: %s",myUserId);
 
-// Data structures
-var roomList = [];
-var numMessagesToShow = 0;
+matrixClient.login('m.login.password', {user: myUserId, password: myPass, initial_device_display_name: 'Ractive Bot' },  function(err, res) {
+          // Console log
+          console.log('Logged in as ' + res.user_id);
+print("creating full client for token %s and device %s",res.access_token,res.device_id);
 
-matrixClient.startClient();
+  // Create client
+matrixClient = sdk.createClient({
+    baseUrl: myBaseUrl,
+    accessToken: res.access_token,
+    userId: myUserId,
+    sessionStore: sessionStore,
+    store: matrixStore,
+    deviceId: myDeviceId
+  });
 
-// show the room list after syncing.
-matrixClient.on("sync",handleSync);
-
-function handleSync(state, prevState, data) {
-    switch (state) {
-        case "PREPARED":
+  // Let's start the client.
 	   matrixClient.setDeviceDetails(matrixClient.deviceId, "ractive bot");
            matrixClient.setDisplayName(myNick);
 
@@ -69,11 +70,24 @@ function handleSync(state, prevState, data) {
 	   matrixClient.initCrypto();
         setTimeout((() => { 
 		print("starting matrix client...");
-		matrixClient.startClient() 
-                setRoomList();
+  matrixClient.startClient({ initialSyncLimit: 0 });
+	        matrixClient.getRooms();
 		matrixClient.uploadKeys();
 	        readyToReply = true;
-}).bind(this), 1000);
+}).bind(this), 3000);
+        }
+);
+
+
+// Data structures
+var numMessagesToShow = 0;
+
+// show the room list after syncing.
+matrixClient.on("sync",handleSync);
+
+function handleSync(state, prevState, data) {
+    switch (state) {
+        case "PREPARED":
 	
         break;
    }
@@ -86,7 +100,7 @@ function handleEvent (event)
             // Will handle it later in Event.decrypted handler
             return;
         }
-print("HandleEvent: %s",util.inspect(event));
+//print("HandleEvent: %s",util.inspect(event));
 
  if (event.getType() === "m.room.message")
 	handleIncomingMessage(event);
@@ -103,11 +117,11 @@ matrixClient.on("RoomMember.membership", function(event, member) {
 
 function handleEventDecrypted (event) 
 {
-print("HandleEventDecrypted: %s",util.inspect(event));
+//print("HandleEventDecrypted: %s",util.inspect(event));
 try {
    if (event !== 'null' && event !== 'undefined' && event.isDecryptionFailure()) {
 	    print("Decryption failure");
-	    //sendErrorMessage();
+	    sendErrorMessage(event.getRoomId());
             return;
         }
 
@@ -115,7 +129,7 @@ try {
 	handleIncomingMessage(event);
   } catch (ex) {
 	print("Decryption error: " + ex);
-	sendErrorMessage();
+	sendErrorMessage(event.getRoomId());
   }
 	
 
@@ -123,7 +137,6 @@ try {
 
 
 matrixClient.on("Room", function() {
-    setRoomList();
 });
 
 // print incoming messages.
@@ -146,15 +159,15 @@ if (event.getSender() !== myUserId && readyToReply)
 
  if (typeof body !== 'undefined' && body.length > 0)
  {
-     if (body.startsWith(myNick))
+     if (body.startsWith("@" + myNick))
      {
     	body = body.substring(myNick.length+1);
-	doBotReponse(event.getRoomId(),event.getSender(),body);
+	doBotResponse(event.getRoomId(),event.getSender(),body);
      }
  }
  else
  {
-	sendErrorMessage();
+	sendErrorMessage(event.getRoomId());
 
 
  }
@@ -163,7 +176,7 @@ if (event.getSender() !== myUserId && readyToReply)
 }
 
 
-function sendErrorMessage ()
+function sendErrorMessage (roomId)
 {
 matrixClient.sendTextMessage(roomId, "Sorry I couldn't understand that").catch((err) => {
                                 print("err sending message: " + err);
@@ -187,14 +200,16 @@ matrixClient.sendTextMessage(roomId, "Sorry I couldn't understand that").catch((
 
 }
 
-function doBotReponse (roomId, sender, req)
+function doBotResponse (roomId, sender, req)
 {
+ print("bot is considering a reply...");
  var rep = rivebot.getReply (sender, req);
-    print("rivebot says: %s to room %s",rep,roomId);
+    print("bot says: %s to room %s",rep,roomId);
+
             matrixClient.sendTextMessage(roomId, rep)
                 .catch((err) => {
                     Object.keys(err.devices).forEach((userId) => {
-    			print("rivebot set device known for: %s",userId);
+    			print("device known for: %s",userId);
                         Object.keys(err.devices[userId]).map((deviceId) => {
     print("rivebot: setting device known for user %s",userId);
                             matrixClient.setDeviceKnown(userId, deviceId, true).
@@ -204,127 +219,10 @@ function doBotReponse (roomId, sender, req)
                         });
                     });
                     // Try again
-                    matrixClient.sendTextMessage(roomId, body).catch((err) => {
-				print("err sending message: " + err);
+                    matrixClient.sendTextMessage(roomId, rep).catch((err) => {
+				print("err sending message AGAIN: " + err);
 			});
                 }).finally(function() {});
-}
-
-function setRoomList() {
-    roomList = matrixClient.getRooms();
-    roomList.sort(function(a,b) {
-        // < 0 = a comes first (lower index) - we want high indexes = newer
-        var aMsg = a.timeline[a.timeline.length-1];
-        if (!aMsg) {
-            return -1;
-        }
-        var bMsg = b.timeline[b.timeline.length-1];
-        if (!bMsg) {
-            return 1;
-        }
-        if (aMsg.getTs() > bMsg.getTs()) {
-            return 1;
-        }
-        else if (aMsg.getTs() < bMsg.getTs()) {
-            return -1;
-        }
-        return 0;
-    });
-}
-
-function printRoomList() {
-    print("Room List:");
-    var fmts = {
-        "invite": clc.cyanBright,
-        "leave": clc.blackBright
-    };
-    for (var i = 0; i < roomList.length; i++) {
-        var msg = roomList[i].timeline[roomList[i].timeline.length-1];
-        var dateStr = "---";
-        var fmt;
-        if (msg) {
-            dateStr = new Date(msg.getTs()).toISOString().replace(
-                /T/, ' ').replace(/\..+/, '');
-        }
-        var myMembership = roomList[i].getMyMembership();
-        if (myMembership) {
-            fmt = fmts[myMembership];
-        }
-        var roomName = fixWidth(roomList[i].name, 25);
-        print(
-            "[%s] %s (%s members)  %s",
-            i, fmt ? fmt(roomName) : roomName,
-            roomList[i].getJoinedMembers().length,
-            dateStr
-        );
-    }
-}
-
-function printMemberList(room) {
-    var fmts = {
-        "join": clc.green,
-        "ban": clc.red,
-        "invite": clc.blue,
-        "leave": clc.blackBright
-    };
-    var members = room.currentState.getMembers();
-    // sorted based on name.
-    members.sort(function(a, b) {
-        if (a.name > b.name) {
-            return -1;
-        }
-        if (a.name < b.name) {
-            return 1;
-        }
-        return 0;
-    });
-    print("Membership list for room \"%s\"", room.name);
-    print(new Array(room.name.length + 28).join("-"));
-    room.currentState.getMembers().forEach(function(member) {
-        if (!member.membership) {
-            return;
-        }
-        var fmt = fmts[member.membership] || function(a){return a;};
-        var membershipWithPadding = (
-            member.membership + new Array(10 - member.membership.length).join(" ")
-        );
-        print(
-            "%s"+fmt(" :: ")+"%s"+fmt(" (")+"%s"+fmt(")"), 
-            membershipWithPadding, member.name, 
-            (member.userId === myUserId ? "Me" : member.userId),
-            fmt
-        );
-    });
-}
-
-function printRoomInfo(room) {
-    var eventDict = room.currentState.events;
-    var eTypeHeader = "    Event Type(state_key)    ";
-    var sendHeader = "        Sender        ";
-    // pad content to 100
-    var restCount = (
-        100 - "Content".length - " | ".length - " | ".length - 
-        eTypeHeader.length - sendHeader.length
-    );
-    var padSide = new Array(Math.floor(restCount/2)).join(" ");
-    var contentHeader = padSide + "Content" + padSide;
-    print(eTypeHeader+sendHeader+contentHeader);
-    print(new Array(100).join("-"));
-    Object.keys(eventDict).forEach(function(eventType) {
-        if (eventType === "m.room.member") { return; } // use /members instead.
-        Object.keys(eventDict[eventType]).forEach(function(stateKey) {
-            var typeAndKey = eventType + (
-                stateKey.length > 0 ? "("+stateKey+")" : ""
-            );
-            var typeStr = fixWidth(typeAndKey, eTypeHeader.length);
-            var event = eventDict[eventType][stateKey];
-            var sendStr = fixWidth(event.getSender(), sendHeader.length);
-            var contentStr = fixWidth(
-                JSON.stringify(event.getContent()), contentHeader.length
-            );
-            print(typeStr+" | "+sendStr+" | "+contentStr);
-        });
-    })
 }
 
 function printLine(event) {
