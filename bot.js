@@ -4,17 +4,15 @@ global.Olm = require('olm');
 // Use path and fs
 const path = require('path');
 const fs = require('fs');
+const util = require('util')
 
-
-const LocalStorageCryptoStore = require('matrix-js-sdk/lib/crypto/store/localStorage-crypto-store').default;
+const LocalStorageCryptoStore = require('./node_modules/matrix-js-sdk/lib/crypto/store/localStorage-crypto-store').default;
 
 require("./creds.js");
 
 var sdk = require("matrix-js-sdk");
 var clc = require("cli-color");
 var rivebot = require ("./modules/rivebot");
-
-
 
 // Has a directory been given on the command line?
 // Otherwise show information message.
@@ -64,12 +62,18 @@ function handleSync(state, prevState, data) {
 	   matrixClient.setDeviceDetails(matrixClient.deviceId, "ractive bot");
            matrixClient.setDisplayName(myNick);
 
-	   matrixClient.on("Event", handleEvent)
-      	   matrixClient.on("Event.decrypted", handleEventDecrypted)
-           setRoomList();
-	   matrixClient.initCrypto();
-        setTimeout((() => { matrixClient.startClient() }).bind(this), 500);
+	   matrixClient.on("event", handleEvent)
+      	   matrixClient.on("Event.decrypted", handleEventDecrypted);
 
+	   print("init matrix crypto");
+	   matrixClient.initCrypto();
+        setTimeout((() => { 
+		print("starting matrix client...");
+		matrixClient.startClient() 
+                setRoomList();
+		matrixClient.uploadKeys();
+	        readyToReply = true;
+}).bind(this), 1000);
 	
         break;
    }
@@ -78,11 +82,11 @@ function handleSync(state, prevState, data) {
 
 function handleEvent (event)
 {
- print("Got Event: " + event);
  if (event.isEncrypted()) {
             // Will handle it later in Event.decrypted handler
             return;
         }
+print("HandleEvent: %s",util.inspect(event));
 
  if (event.getType() === "m.room.message")
 	handleIncomingMessage(event);
@@ -99,14 +103,22 @@ matrixClient.on("RoomMember.membership", function(event, member) {
 
 function handleEventDecrypted (event) 
 {
-   if (event.isDecryptionFailure()) {
-	    print("Decryption failure: " + event);
-	    sendErrorMessage();
+print("HandleEventDecrypted: %s",util.inspect(event));
+try {
+   if (event !== 'null' && event !== 'undefined' && event.isDecryptionFailure()) {
+	    print("Decryption failure");
+	    //sendErrorMessage();
             return;
         }
 
  if (event.getType() === "m.room.message")
-	handleIncomingMessage(event.getClearEvent());
+	handleIncomingMessage(event);
+  } catch (ex) {
+	print("Decryption error: " + ex);
+	sendErrorMessage();
+  }
+	
+
 }
 
 
@@ -121,7 +133,7 @@ matrixClient.on("Room.timeline", function(event, room, toStartOfTimeline) {
     }
 
     //printLine(event);
-    handleIncomingMessage(event);
+    //handleIncomingMessage(event);
 });
 
 function handleIncomingMessage (event)
@@ -130,6 +142,7 @@ function handleIncomingMessage (event)
 if (event.getSender() !== myUserId && readyToReply)
 {
  var body = event.getContent().body;
+ print("%s says: %s",event.getSender(),body);
 
  if (typeof body !== 'undefined' && body.length > 0)
  {
@@ -154,7 +167,24 @@ function sendErrorMessage ()
 {
 matrixClient.sendTextMessage(roomId, "Sorry I couldn't understand that").catch((err) => {
                                 print("err sending message: " + err);
+                        })
+.catch((err) => {
+                    Object.keys(err.devices).forEach((userId) => {
+                        print("rivebot set device known for: %s",userId);
+                        Object.keys(err.devices[userId]).map((deviceId) => {
+    print("rivebot: setting device known for user %s",userId);
+                            matrixClient.setDeviceKnown(userId, deviceId, true).
+                            catch((err) => {
+                                print("err setting device known: " + err);
+                                });;
                         });
+                    });
+                    // Try again
+                    matrixClient.sendTextMessage(roomId, body).catch((err) => {
+                                print("err sending message: " + err);
+                        });
+                }).finally(function() {});
+
 }
 
 function doBotReponse (roomId, sender, req)
