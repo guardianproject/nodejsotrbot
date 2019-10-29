@@ -100,7 +100,7 @@ function handleEventDecrypted (event)
    if (event.isDecryptionFailure()) {
             //logger.warn("Decryption failure", { event });
 	    print("Decryption failure: " + event);
-            //sendMessage(event.getRoomId(), event.getRoomId(), "I couldn't read what you wrote (decryption failed!)");
+	    doBotReponse(event.getRoomId(),event.getRoomId(),"hello");
             return;
         }
 
@@ -119,9 +119,6 @@ matrixClient.on("Room.timeline", function(event, room, toStartOfTimeline) {
     if (toStartOfTimeline) {
         return; // don't print paginated results
     }
-
-//    printLine(event);
-    handleIncomingMessage(event);
 });
 
 function handleIncomingMessage (event)
