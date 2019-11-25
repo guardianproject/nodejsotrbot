@@ -14,6 +14,9 @@ var LocalStorage = require('node-localstorage').LocalStorage;
 var rivebot = require ("./modules/rivebot");
 const LocalStorageCryptoStore = require('./node_modules/matrix-js-sdk/lib/crypto/store/localStorage-crypto-store').default;
 
+
+var isReady = false;
+
 // Has a directory been given on the command line?
 // Otherwise show information message.
 var targetDir = process.argv[2];
@@ -64,7 +67,12 @@ matrixClient.on("sync", function(state, prevState, data) {
           print("client is prepared!");
           matrixClient.setDeviceDetails(matrixClient.deviceId,"bot");
           matrixClient.setDisplayName(myNick);
-          //setRoomList();
+
+      setTimeout((() => { 
+	      isReady = true;
+
+}).bind(this), 10000);
+
         break;
    }
 });
@@ -100,7 +108,9 @@ function handleEventDecrypted (event)
    if (event.isDecryptionFailure()) {
             //logger.warn("Decryption failure", { event });
 	    print("Decryption failure: " + event);
-	    doBotReponse(event.getRoomId(),event.getRoomId(),"hello");
+	  // 	if (isReady)
+           // sendMessage(event.getRoomId(), event.getRoomId(), "I couldn't read what you wrote (decryption failed!)");
+	   doBotReponse(event.getRoomId(), event.getRoomId(), "hello");
             return;
         }
 
@@ -119,6 +129,9 @@ matrixClient.on("Room.timeline", function(event, room, toStartOfTimeline) {
     if (toStartOfTimeline) {
         return; // don't print paginated results
     }
+
+//    printLine(event);
+    //handleIncomingMessage(event);
 });
 
 function handleIncomingMessage (event)
@@ -130,12 +143,16 @@ if (event.getSender() !== myUserId)
 
  if (typeof body !== 'undefined' && body !== 'null' && body.length > 0)// && body.startsWith(myNick))
  {
+	var count = matrixClient.getRoom(event.getRoomId()).getJoinedMemberCount();
 
-     if (body.toLowerCase().includes(myNick))
+     if (body.toLowerCase().startsWith("@" + myNick))
      {
 	     body = body.substring(myNick.length+1);
 	doBotReponse(event.getRoomId(),event.getRoomId(),body);
 	    }
+	 else if (count ==2)
+	doBotReponse(event.getRoomId(),event.getRoomId(),body);
+		 
  }
 
 }
