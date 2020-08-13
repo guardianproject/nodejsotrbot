@@ -12,8 +12,7 @@ var sdk = require("matrix-js-sdk");
 var clc = require("cli-color");
 var LocalStorage = require('node-localstorage').LocalStorage;
 var rivebot = require ("./modules/rivebot");
-const LocalStorageCryptoStore = require('./node_modules/matrix-js-sdk/lib/crypto/store/localStorage-crypto-store').default;
-
+var LocalStorageCryptoStore = require('./node_modules/matrix-js-sdk/lib/crypto/store/localStorage-crypto-store').LocalStorageCryptoStore;
 
 var isReady = false;
 
@@ -28,33 +27,39 @@ if(targetDir === undefined) {
 
 // Create in memory store
 var localpath = path.join(targetDir,'localstorage');
-var localStorage = new LocalStorage(localpath)
+var localStorage = new LocalStorage(localpath);
 
-var cryptoStore = new LocalStorageCryptoStore(localStorage);
-sdk.setCryptoStoreFactory(() => cryptoStore);
 
-var matrixStore = new sdk.MatrixInMemoryStore({localStorage});
-var sessionStore =  new sdk.WebStorageSessionStore(localStorage);
+const sstore =  new sdk.WebStorageSessionStore(localStorage);
+//  const cstore = new sdk.MemoryCryptoStore(localStorage);
+//     var matrixStore = new sdk.MatrixInMemoryStore({localStorage});
+
+// Loading localStorage module
+// if (typeof global.localStorage === "undefined" || global.localStorage === null)
+//
+const cstore = new LocalStorageCryptoStore(localStorage);
+        //sdk.setCryptoStoreFactory(() => cstore);
+        sdk.setCryptoStoreFactory(() => cstore);
 
 // Delay startClient() to give initCrypto() a little room to breathe
         // This will delay first event delivery, but shouldn't cause any real problems
-var matrixClient = sdk.createClient({
+var matrixClient = sdk.createClient({ 
+	sessionId: "default",
     baseUrl: myBaseUrl,
-    sessionStore: sessionStore,
-    store: matrixStore,
-    cryptoStore: cryptoStore,
+	  store: new sdk.MemoryStore({ localStorage }),
+	        sessionStore: sstore,
+	cryptoStore: cstore,
     deviceId: myDeviceId,
     userId: myUserId,
     accessToken: myAccessToken,
 });
 
 
-         matrixClient.initCrypto();
-
-      setTimeout((() => { 
-matrixClient.startClient() 
-
-}).bind(this), 500);
+matrixClient.initCrypto();
+matrixClient.startClient();
+ // Delay startClient() to give initCrypto() a little room to breathe
+//         // This will delay first event delivery, but shouldn't cause any real problems
+                 //setTimeout((() => { matrixClient.startClient() }).bind(this), 500);
 
 // Data structures
 var roomList = [];
@@ -65,33 +70,12 @@ matrixClient.on("sync", function(state, prevState, data) {
     switch (state) {
         case "PREPARED":
           print("client is prepared!");
-          matrixClient.setDeviceDetails(matrixClient.deviceId,"bot");
-          matrixClient.setDisplayName(myNick);
-
-      setTimeout((() => { 
-	      isReady = true;
-
-}).bind(this), 10000);
-
-        break;
-   }
-});
-
-
-function handleEvent (event)
-{
- print("Got Event: " + event);
- if (event.isEncrypted()) {
-            // Will handle it later in Event.decrypted handler
-            return;
-        }
-
- if (event.getType() === "m.room.message")
-	handleIncomingMessage(event);
-}
-
-matrixClient.on("Event", handleEvent)
 matrixClient.on("event", handleEvent)
+matrixClient.on("Event.decrypted", handleEventDecrypted)
+
+		    matrixClient.setDeviceDetails(myDeviceId, "zom-bot");
+	//	                matrixClient.setDisplayName(myNick);
+	//	                matrixClient.setPresence({ presence: "online" });
 
 matrixClient.on("RoomMember.membership", function(event, member) {
 	printLine(event);
@@ -99,18 +83,35 @@ matrixClient.on("RoomMember.membership", function(event, member) {
 	   // if (member.roomId)
 	       print("joining: " + member.roomId);
            matrixClient.joinRoom(member.roomId).catch((err) => {});
+	       matrixClient.setRoomEncryption(member.roomId, { algorithm: 'm.megolm.v1.aes-sha2' })
        }
    });
+		        roomList = matrixClient.getRooms();
+	  isReady = true; 
+		    print("sync is complete");
+        break;
+   }
+});
+
+
+function handleEvent (event)
+{
+// print("Got Event: " + event);
+
+ if (isReady && event.getType() === "m.room.message")
+	handleIncomingMessage(event);
+}
 
 function handleEventDecrypted (event) 
 {
+
 
    if (event.isDecryptionFailure()) {
             //logger.warn("Decryption failure", { event });
 	    print("Decryption failure: " + event);
 	  // 	if (isReady)
-           // sendMessage(event.getRoomId(), event.getRoomId(), "I couldn't read what you wrote (decryption failed!)");
-	   doBotReponse(event.getRoomId(), event.getRoomId(), "hello");
+            //sendMessage(event.getRoomId(), event.getRoomId(), "I couldn't read what you wrote (decryption failed!)");
+	   //doBotReponse(event.getRoomId(), event.getRoomId(), "hello");
             return;
         }
 
@@ -118,21 +119,6 @@ function handleEventDecrypted (event)
 	handleIncomingMessage(event);
 }
 
-matrixClient.on("Event.decrypted", handleEventDecrypted)
-
-matrixClient.on("Room", function() {
-//    setRoomList();
-});
-
-// print incoming messages.
-matrixClient.on("Room.timeline", function(event, room, toStartOfTimeline) {
-    if (toStartOfTimeline) {
-        return; // don't print paginated results
-    }
-
-//    printLine(event);
-    //handleIncomingMessage(event);
-});
 
 function handleIncomingMessage (event)
 {
@@ -140,6 +126,7 @@ function handleIncomingMessage (event)
 if (event.getSender() !== myUserId)
 {
  var body = event.getContent().body;
+ print("got message: " + body);
 
  if (typeof body !== 'undefined' && body !== 'null' && body.length > 0)// && body.startsWith(myNick))
  {
@@ -161,9 +148,11 @@ if (event.getSender() !== myUserId)
 
 function sendMessage (roomId, sender, body)
 {
+	print("sending message to " + roomId);
             matrixClient.sendTextMessage(roomId, rep)
                 .catch((err) => {
                         if (typeof Object.keys  !== 'undefined' && typeof err.devices  !== 'undefined' ) {
+                               print("rivebot: setting devices as known");
                     Object.keys(err.devices).forEach((userId) => {
                         Object.keys(err.devices[userId]).map((deviceId) => {
                                print("rivebot: setting device known for user %s",userId);
@@ -173,7 +162,7 @@ function sendMessage (roomId, sender, body)
                     }
                     // Try again
                     //matrixClient.sendTextMessage(roomId, body);
-                }).finally(function() {});
+                });
 }
 
 
@@ -194,7 +183,7 @@ function doBotReponse (roomId, sender, req)
                     }
                     // Try again
                     //matrixClient.sendTextMessage(roomId, body);
-                }).finally(function() {});
+                });
 }
 
 function setRoomList() {
@@ -405,5 +394,4 @@ function fixWidth(str, len) {
     }
     return str;
 }
-
 
