@@ -9,6 +9,7 @@
   "dependencies": {
     "cli-color": "^1.0.0",
     "daemonize2": "^0.4.2",
+    "matrix-bot-sdk": "^0.5.4",
     "matrix-js-sdk": "^2.2.0",
     "nano": "^6.4.2",
     "natural": "^0.5.6",
